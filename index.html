@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Krazality</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --void: #0a0518;
+    --void2: #160a33;
+    --neon-green: #39ff88;
+    --neon-pink: #ff3fd8;
+    --neon-yellow: #ffe94a;
+    --neon-cyan: #33f5ff;
+    --neon-purple: #b44bff;
+    --neon-orange: #ffa726;
+    --danger: #ff4d6d;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: radial-gradient(120% 120% at 50% 20%, #1c0b3f 0%, var(--void) 55%, #05020c 100%);
+    font-family: "Press Start 2P", "Courier New", monospace;
+    color: #eafff5;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* ---------- stage ---------- */
+  #stage {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(90% 60% at 50% 110%, rgba(180, 75, 255, 0.10) 0%, transparent 60%),
+      radial-gradient(70% 50% at 50% -10%, rgba(51, 245, 255, 0.08) 0%, transparent 60%),
+      #05020c;
+  }
+
+  #viewport {
+    position: relative;
+    width: min(100vw, calc(100vh * 16 / 9));
+    aspect-ratio: 16 / 9;
+    box-shadow: 0 0 0 3px #241150, 0 0 60px rgba(180, 75, 255, 0.35), 0 0 120px rgba(51, 245, 255, 0.12);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  #game {
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    -ms-interpolation-mode: nearest-neighbor;
+    background: #070212;
+    cursor: default;
+  }
+
+  /* subtle CRT scanlines */
+  #scanlines {
+    position: absolute; inset: 0; z-index: 40;
+    pointer-events: none;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.16) 3px);
+    mix-blend-mode: multiply;
+    opacity: 0.5;
+  }
+
+  /* ---------- HUD top bar ---------- */
+  #hud {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px;
+    background: linear-gradient(to bottom, rgba(10, 5, 24, 0.92), rgba(10, 5, 24, 0.55) 80%, rgba(10, 5, 24, 0));
+    font-size: 10px;
+    text-shadow: 0 0 8px rgba(51,245,255,0.6);
+  }
+  #hud.hidden, .overlay.hidden, #winScreen.hidden, #pauseScreen.hidden { display: none !important; }
+
+  #shardBox { display: flex; align-items: center; gap: 10px; }
+  #shardIcons { display: flex; gap: 6px; }
+  .shard-ico {
+    width: 14px; height: 14px;
+    background: #0d2a33;
+    border: 2px solid #2e7d8f;
+    transform: rotate(45deg) skew(-8deg, -8deg);
+    box-shadow: 0 0 6px rgba(51,245,255,0.35) inset;
+  }
+  .shard-ico.on {
+    background: var(--neon-cyan);
+    border-color: #b8fbff;
+    box-shadow: 0 0 10px var(--neon-cyan), 0 0 20px rgba(51,245,255,0.6);
+    animation: shardPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes shardPulse { 0%,100% { transform: rotate(45deg) skew(-8deg,-8deg) scale(1); } 50% { transform: rotate(45deg) skew(-8deg,-8deg) scale(1.25); } }
+  #shardText { color: #d9fffa; letter-spacing: 1px; }
+  #shardText b { color: var(--neon-cyan); }
+
+  #levelBox { display: flex; align-items: center; gap: 8px; }
+  #levelBox > span { font-size: 9px; color: #cbbff0; }
+  #levelNum { color: var(--neon-yellow); text-shadow: 0 0 8px rgba(255,233,74,0.7); }
+  #dustBar {
+    width: 90px; height: 10px;
+    border: 2px solid #3a2a6e;
+    background: rgba(10, 5, 24, 0.85);
+  }
+  #dustFill {
+    height: 100%; width: 0%;
+    background: linear-gradient(to right, var(--neon-purple), var(--neon-cyan));
+    box-shadow: 0 0 8px rgba(51,245,255,0.7);
+    transition: width 0.3s ease;
+  }
+  #dustNum { font-size: 8px; color: #b9a8f0; }
+
+  #hudRight { display: flex; align-items: center; gap: 8px; }
+  .btn {
+    font-family: inherit; font-size: 9px;
+    color: #eafff5;
+    background: linear-gradient(to bottom, #2a1560, #1a0c3e);
+    border: 2px solid #5b3bb0;
+    padding: 8px 12px;
+    cursor: pointer;
+    text-shadow: 0 0 6px rgba(180,75,255,0.8);
+    letter-spacing: 1px;
+    transition: transform 0.06s ease, box-shadow 0.12s ease, background 0.12s ease;
+  }
+  .btn:hover { background: linear-gradient(to bottom, #3a1f80, #241050); box-shadow: 0 0 14px rgba(180,75,255,0.6); }
+  .btn:active { transform: translateY(2px); }
+  #soundBtn { padding: 8px 10px; min-width: 34px; }
+
+  /* ---------- weapon panel (hotbar built from player.inventory) ---------- */
+  #weaponPanel {
+    position: absolute; bottom: 10px; left: 10px; z-index: 30;
+    display: flex; align-items: stretch; gap: 6px;
+  }
+  #wslots { display: flex; gap: 6px; }
+  .wslot {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 8px;
+    font-size: 8px;
+    background: rgba(10, 5, 24, 0.8);
+    border: 2px solid #3a2a6e;
+    color: #9d8ecf;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.1s ease;
+  }
+  .wslot:hover:not(.active) {
+    border-color: var(--neon-pink);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(255,63,216,0.35);
+  }
+  .wslot .wkey { color: var(--neon-cyan); text-shadow: 0 0 6px rgba(51,245,255,0.7); }
+  .wslot.active {
+    border-color: var(--neon-cyan);
+    color: #fff;
+    box-shadow: 0 0 12px rgba(51,245,255,0.45), inset 0 0 8px rgba(51,245,255,0.12);
+  }
+  #ammoCount { color: var(--neon-yellow); text-shadow: 0 0 6px rgba(255,233,74,0.7); }
+  #ammoBox {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 8px; font-size: 8px;
+    background: rgba(10, 5, 24, 0.8);
+    border: 2px solid #3a2a6e;
+    color: var(--neon-yellow); letter-spacing: 1px;
+    text-shadow: 0 0 6px rgba(255,233,74,0.6);
+  }
+  #ammoBox.hidden { display: none !important; }
+  #activeWeapon {
+    font-size: 9px; color: #9d8ecf; letter-spacing: 1px;
+    padding: 6px 10px;
+    border: 2px solid #3a2a6e;
+    background: rgba(10, 5, 24, 0.8);
+  }
+  #activeWeapon b { color: var(--neon-cyan); text-shadow: 0 0 6px rgba(51,245,255,0.7); }
+  #armorStatus {
+    font-size: 9px; color: #9d8ecf; letter-spacing: 1px;
+    padding: 6px 10px;
+    border: 2px solid #3a2a6e;
+    background: rgba(10, 5, 24, 0.8);
+  }
+  #armorStatus.on {
+    color: #e8ecf5;
+    border-color: #c9ced6;
+    box-shadow: 0 0 12px rgba(201,206,214,0.45), inset 0 0 8px rgba(201,206,214,0.1);
+    text-shadow: 0 0 8px rgba(255,255,255,0.55);
+  }
+
+  /* ---------- vitals: HP hearts + circular SOUL meter ---------- */
+  #vitals {
+    position: absolute; bottom: 10px; right: 10px; z-index: 30;
+    display: flex; align-items: flex-end; gap: 12px;
+  }
+  #vitals.hidden { display: none !important; }
+  #hearts { display: flex; gap: 3px; padding-bottom: 11px; }
+  .heart {
+    width: 13px; height: 13px;
+    font-size: 12px; line-height: 13px;
+    text-align: center;
+    color: #2c2150;
+    text-shadow: 0 0 5px rgba(255,77,109,0.25);
+    transition: color 0.15s ease, text-shadow 0.15s ease;
+  }
+  .heart.on { color: var(--danger); text-shadow: 0 0 8px rgba(255,77,109,0.9); }
+  #hearts.flash { animation: heartsFlash 0.55s ease; }
+  @keyframes heartsFlash {
+    0%, 100% { filter: none; }
+    40% { filter: brightness(2.4) drop-shadow(0 0 10px var(--neon-cyan)); }
+  }
+  #soulMeter {
+    position: relative;
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    border: 3px solid #3a2a6e;
+    background: #0d0620;
+    box-shadow: inset 0 0 10px rgba(10,5,24,0.9), 0 0 10px rgba(51,245,255,0.12);
+  }
+  #soulFill {
+    position: absolute; inset: 3px;
+    border-radius: 50%;
+    background: conic-gradient(var(--neon-cyan) 0deg, #241d3d 0deg 360deg);
+  }
+  #soulMeter.pulse { animation: soulPulse 0.25s ease; }
+  @keyframes soulPulse {
+    0% { box-shadow: inset 0 0 10px rgba(10,5,24,0.9), 0 0 0 rgba(51,245,255,0); border-color: #3a2a6e; }
+    50% { box-shadow: inset 0 0 10px rgba(10,5,24,0.9), 0 0 18px rgba(51,245,255,0.9); border-color: var(--neon-cyan); }
+    100% { box-shadow: inset 0 0 10px rgba(10,5,24,0.9), 0 0 0 rgba(51,245,255,0); border-color: #3a2a6e; }
+  }
+  #soulInner {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 2px;
+  }
+  #soulNum { font-size: 9px; color: #eaffff; text-shadow: 0 0 8px rgba(51,245,255,0.9); }
+  #soulLabel { font-size: 6px; color: #8d7fbd; letter-spacing: 1px; }
+
+  /* ---------- orange Rage Meter ---------- */
+  #rageBox {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding-bottom: 2px;
+  }
+  #rageBar {
+    width: 12px; height: 44px;
+    border: 2px solid #6b3a12;
+    background: #0d0620;
+    box-shadow: inset 0 0 8px rgba(10,5,24,0.9), 0 0 8px rgba(255,167,38,0.12);
+  }
+  #rageFill {
+    width: 100%; height: 0%;
+    background: linear-gradient(to top, #b34700, var(--neon-orange), #ffd9a0);
+    box-shadow: 0 0 8px rgba(255,167,38,0.8);
+    transition: height 0.3s ease;
+  }
+  #rageLabel { font-size: 6px; color: #e8a24d; letter-spacing: 1px; text-shadow: 0 0 6px rgba(255,167,38,0.6); }
+
+  /* ---------- toasts ---------- */
+  #toast {
+    position: absolute; top: 18%; left: 50%; transform: translateX(-50%);
+    z-index: 35;
+    padding: 10px 18px;
+    font-size: 12px; text-align: center; line-height: 1.8;
+    color: #fff;
+    background: rgba(8, 4, 20, 0.85);
+    border: 2px solid var(--neon-cyan);
+    box-shadow: 0 0 24px rgba(51,245,255,0.5);
+    text-shadow: 0 0 10px rgba(51,245,255,0.9);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(6px); }
+  #toast.warn { border-color: var(--danger); box-shadow: 0 0 24px rgba(255,77,109,0.5); text-shadow: 0 0 10px rgba(255,77,109,0.9); }
+
+  /* ---------- overlays ---------- */
+  .overlay {
+    position: absolute; inset: 0; z-index: 50;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+    background: radial-gradient(90% 80% at 50% 35%, rgba(23, 10, 52, 0.94), rgba(5, 2, 12, 0.97));
+    padding: 20px;
+    gap: 22px;
+  }
+
+  #title {
+    font-size: clamp(26px, 6vw, 54px);
+    line-height: 1.2;
+    color: var(--neon-pink);
+    text-shadow:
+      0 0 8px rgba(255,63,216,0.9),
+      0 0 22px rgba(255,63,216,0.55),
+      0 0 46px rgba(255,63,216,0.35),
+      0 0 80px rgba(180,75,255,0.5);
+    letter-spacing: 3px;
+    animation: titleFloat 3s ease-in-out infinite;
+  }
+  /* glitching neon-pink pixel title (Krazality) */
+  .glitch {
+    position: relative;
+    display: inline-block;
+    animation: glitchSkew 2.4s steps(2, jump-none) infinite;
+  }
+  .glitch::before, .glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    inset: 0;
+    opacity: 0.8;
+    pointer-events: none;
+  }
+  .glitch::before { color: #33f5ff; animation: glitchShift 1.4s steps(3, jump-none) infinite; }
+  .glitch::after { color: #ffe94a; animation: glitchShift 1.9s steps(3, jump-none) infinite reverse; }
+  @keyframes glitchShift {
+    0% { transform: translate(0); clip-path: inset(0 0 88% 0); }
+    20% { transform: translate(-2px, 1px); clip-path: inset(42% 0 30% 0); }
+    40% { transform: translate(2px, -1px); clip-path: inset(8% 0 62% 0); }
+    60% { transform: translate(-1px, 0); clip-path: inset(62% 0 6% 0); }
+    80% { transform: translate(1px, 1px); clip-path: inset(22% 0 46% 0); }
+    100% { transform: translate(0); clip-path: inset(88% 0 0 0); }
+  }
+  @keyframes glitchSkew {
+    0%, 100% { transform: none; }
+    92% { transform: skewX(0); }
+    94% { transform: skewX(-7deg) translateX(2px); }
+    96% { transform: skewX(6deg) translateX(-2px); }
+    98% { transform: skewX(0); }
+  }
+  @keyframes titleFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+  #subtitle { font-size: 10px; color: #b9a8f0; letter-spacing: 2px; text-shadow: 0 0 8px rgba(180,75,255,0.6); }
+
+  #controlsGrid {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 8px 16px;
+    font-size: 9px;
+    color: #cbbff0;
+    text-align: left;
+    line-height: 1.9;
+  }
+  #controlsGrid .k {
+    color: var(--neon-yellow);
+    text-shadow: 0 0 8px rgba(255,233,74,0.5);
+  }
+
+  #jumpIn {
+    font-size: 14px;
+    padding: 16px 40px;
+    background: linear-gradient(to bottom, #0fce8a, #07a06a);
+    border: 3px solid #b8ffe0;
+    color: #04301f;
+    text-shadow: none;
+    box-shadow: 0 0 22px rgba(57,255,136,0.65), 0 6px 0 #05623f;
+    animation: btnBreathe 1.6s ease-in-out infinite;
+    letter-spacing: 2px;
+  }
+  #jumpIn:hover { box-shadow: 0 0 34px rgba(57,255,136,0.9), 0 6px 0 #05623f; transform: translateY(-2px); }
+  #jumpIn:active { transform: translateY(4px); box-shadow: 0 0 22px rgba(57,255,136,0.6), 0 2px 0 #05623f; }
+  @keyframes btnBreathe { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.18); } }
+
+  .miniDeco { position: absolute; font-size: 18px; opacity: 0.5; animation: decoDrift 6s ease-in-out infinite; pointer-events: none; }
+  @keyframes decoDrift { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-14px) rotate(3deg); } }
+
+  /* win / pause */
+  #winTitle { font-size: clamp(18px, 3.6vw, 30px); color: var(--neon-cyan); text-shadow: 0 0 16px rgba(51,245,255,0.8), 0 0 60px rgba(51,245,255,0.4); line-height: 1.5; }
+  #winStats { font-size: 10px; color: #cbbff0; line-height: 2.2; text-shadow: 0 0 8px rgba(180,75,255,0.5); }
+  #winStats b { color: var(--neon-green); }
+  #pauseTitle { font-size: 22px; color: var(--neon-yellow); text-shadow: 0 0 16px rgba(255,233,74,0.7); }
+  .overlay small { font-size: 8px; color: #8d7fbd; line-height: 2; }
+  #winScreen .btn, #pauseScreen .btn { font-size: 11px; padding: 12px 22px; }
+
+  /* ---- skill tree ---- */
+  #skillsScreen { background: rgba(5, 2, 12, 0.88); gap: 16px; }
+  #skillsModal {
+    width: min(620px, 94%);
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    padding: 26px 22px;
+    background: linear-gradient(to bottom, #160a30, #0a0416);
+    border: 3px solid var(--neon-cyan);
+    box-shadow: 0 0 30px rgba(51,245,255,0.35), inset 0 0 30px rgba(51,245,255,0.05);
+  }
+  #skillsTitle { font-size: 20px; color: var(--neon-cyan); text-shadow: 0 0 14px rgba(51,245,255,0.8); }
+  #skillPointsBox { font-size: 10px; color: var(--neon-yellow); text-shadow: 0 0 8px rgba(255,233,74,0.6); }
+  #skillsGrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; width: 100%; }
+  .skillCard {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 14px 12px;
+    text-align: center;
+    background: rgba(10, 5, 24, 0.85);
+    border: 2px solid #3a2a6e;
+    transition: all 0.15s ease;
+  }
+  .skillCard .skillName { font-size: 9px; color: #eafff5; letter-spacing: 1px; text-shadow: 0 0 8px rgba(51,245,255,0.35); }
+  .skillCard .skillDesc { font-size: 8px; color: #9d8ecf; line-height: 1.8; }
+  .skillBtn {
+    font-family: inherit; font-size: 9px; letter-spacing: 1px;
+    padding: 8px 12px; cursor: pointer;
+    background: #241d3d; color: #9d8ecf;
+    border: 2px solid #3a2a6e;
+    transition: all 0.12s ease;
+  }
+  .skillBtn:hover:not(:disabled) { background: #2f2450; box-shadow: 0 0 12px rgba(180,75,255,0.5); transform: translateY(-1px); }
+  .skillBtn:disabled { cursor: default; opacity: 0.45; }
+  .skillCard.owned {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 18px rgba(51,245,255,0.4), inset 0 0 12px rgba(51,245,255,0.06);
+  }
+  .skillCard.owned .skillName { text-shadow: 0 0 10px rgba(51,245,255,0.9); }
+  .skillCard.owned .skillBtn {
+    background: rgba(51,245,255,0.16);
+    color: #eaffff;
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 16px rgba(51,245,255,0.85), inset 0 0 8px rgba(51,245,255,0.25);
+    text-shadow: 0 0 8px rgba(51,245,255,0.9);
+  }
+  #skillsScreen small { color: #8d7fbd; }
+  @media (max-width: 640px) { #skillsGrid { grid-template-columns: 1fr; } }
+
+  /* ---- Level 10 Faction Class choice ---- */
+  #factionScreen { background: rgba(5, 2, 12, 0.9); gap: 14px; }
+  #factionTitle {
+    font-size: clamp(16px, 3.6vw, 30px);
+    color: var(--neon-pink);
+    text-shadow: 0 0 14px rgba(255,63,216,0.85), 0 0 40px rgba(255,63,216,0.4);
+    line-height: 1.5;
+  }
+  #factionSub {
+    font-size: 8px; color: #b9a8f0; letter-spacing: 2px;
+    text-shadow: 0 0 8px rgba(180,75,255,0.6);
+  }
+  #factionGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    width: min(680px, 96%);
+  }
+  .factionCard {
+    font-family: inherit;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 16px 12px 14px;
+    text-align: center;
+    background: rgba(10, 5, 24, 0.88);
+    border: 2px solid #3a2a6e;
+    color: #eafff5;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: transform 0.12s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .factionCard:hover { transform: translateY(-4px); }
+  .factionCard .fName { font-size: 10px; text-shadow: 0 0 8px rgba(51,245,255,0.5); }
+  .factionCard .fClass { font-size: 7px; color: #8d7fbd; letter-spacing: 2px; }
+  .factionCard .fWeapon { font-size: 8px; color: #eafff5; line-height: 1.8; min-height: 30px; }
+  .factionCard .fArmor { font-size: 7px; color: #b9a8f0; line-height: 1.8; min-height: 14px; }
+  .factionCard .fSyn { font-size: 7px; color: var(--neon-yellow); line-height: 1.8; text-shadow: 0 0 6px rgba(255,233,74,0.5); }
+  .factionCard.fc-cyan:hover { border-color: var(--neon-cyan); box-shadow: 0 0 20px rgba(51,245,255,0.5); }
+  .factionCard.fc-cyan .fName { color: var(--neon-cyan); }
+  .factionCard.fc-pink:hover { border-color: var(--neon-pink); box-shadow: 0 0 20px rgba(255,63,216,0.5); }
+  .factionCard.fc-pink .fName { color: var(--neon-pink); }
+  .factionCard.fc-yellow:hover { border-color: var(--neon-yellow); box-shadow: 0 0 20px rgba(255,233,74,0.5); }
+  .factionCard.fc-yellow .fName { color: var(--neon-yellow); }
+  #factionScreen small { color: var(--danger); letter-spacing: 1px; }
+  @media (max-width: 640px) { #factionGrid { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) {
+    #hud { flex-wrap: wrap; gap: 6px; }
+    #hudRight { flex-wrap: wrap; justify-content: flex-end; }
+    #dustBar { width: 60px; }
+    #dustNum { display: none; }
+    .btn { padding: 6px 8px; }
+  }
+
+  .fade-flash {
+    position: absolute; inset: 0; z-index: 45;
+    background: var(--neon-purple);
+    opacity: 0; pointer-events: none;
+  }
+
+  /* random dimensional anomaly warning — neon-red border flash */
+  #anomalyFlash {
+    position: absolute; inset: 0; z-index: 44;
+    pointer-events: none; opacity: 0;
+    border: 6px solid var(--danger);
+    box-shadow: inset 0 0 60px rgba(255, 77, 109, 0.5), 0 0 30px rgba(255, 77, 109, 0.6);
+  }
+
+  /* Krazal Rage — pulsing crimson screen border while active */
+  #rageFlash {
+    position: absolute; inset: 0; z-index: 44;
+    pointer-events: none; opacity: 0;
+    border: 5px solid var(--danger);
+    box-shadow: inset 0 0 80px rgba(255, 77, 109, 0.55), 0 0 40px rgba(255, 77, 109, 0.6);
+    background: rgba(255, 77, 109, 0.06);
+  }
+
+  /* legendary unlock — full-screen dramatic pixel text animation */
+  #legendBanner {
+    position: absolute; inset: 0; z-index: 55;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; text-align: center;
+    background: radial-gradient(70% 60% at 50% 50%, rgba(255, 77, 109, 0.18), rgba(5, 2, 12, 0.55));
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  #legendBanner.hidden { display: none; }
+  #legendBanner .l1 {
+    font-size: clamp(14px, 3.4vw, 28px);
+    color: var(--danger);
+    text-shadow: 0 0 10px rgba(255,77,109,0.9), 0 0 40px rgba(255,77,109,0.5), 0 0 80px rgba(255,77,109,0.3);
+    letter-spacing: 3px; line-height: 1.6;
+    animation: legendFlicker 0.6s steps(2, jump-none) infinite;
+  }
+  #legendBanner .l2 {
+    font-size: clamp(9px, 2vw, 16px);
+    color: #ffd0d8;
+    text-shadow: 0 0 12px rgba(255,77,109,0.8);
+    letter-spacing: 2px;
+    animation: legendGlitch 1.4s steps(3, jump-none) infinite;
+  }
+  @keyframes legendFlicker {
+    0%, 90%, 100% { opacity: 1; }
+    92% { opacity: 0.2; }
+    94% { opacity: 1; }
+    96% { opacity: 0.4; }
+  }
+  @keyframes legendGlitch {
+    0%, 100% { transform: none; }
+    90% { transform: none; }
+    93% { transform: translate(-2px, 1px) skewX(-4deg); }
+    96% { transform: translate(2px, -1px) skewX(3deg); }
+  }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="viewport">
+      <canvas id="game" width="480" height="270"></canvas>
+      <div id="scanlines"></div>
+
+      <!-- HUD -->
+      <div id="hud" class="hidden">
+        <div id="shardBox">
+          <span id="shardIcons">
+            <span class="shard-ico"></span><span class="shard-ico"></span><span class="shard-ico"></span>
+          </span>
+          <span id="shardText">Shards Collected: <b>0/3</b></span>
+        </div>
+        <div id="levelBox">
+          <span>LV <b id="levelNum">1</b></span>
+          <div id="dustBar"><div id="dustFill"></div></div>
+          <span id="dustNum">0</span>
+        </div>
+        <div id="hudRight">
+          <span id="activeWeapon" title="Active hotbar weapon">WEAPON: GLOVE</span>
+          <span id="armorStatus" title="Milestone armor set + shield hearts">ARMOR: NONE</span>
+          <button id="skillsBtn" class="btn" title="Skill tree (K)">SKILLS</button>
+          <button id="soundBtn" class="btn" title="Toggle sound (M)">SND</button>
+          <button id="restartBtn" class="btn" title="Restart level (F2)">⟳ RESTART</button>
+        </div>
+      </div>
+
+      <!-- Weapon panel: hotbar slots are rebuilt from player.inventory in JS -->
+      <div id="weaponPanel" class="hidden">
+        <div id="wslots"></div>
+        <div id="ammoBox" class="hidden">AMMO <b id="ammoCount">30/30</b></div>
+      </div>
+
+      <!-- Vitals: HP hearts + circular Dimension SOUL meter -->
+      <div id="vitals" class="hidden">
+        <div id="hearts" title="HP — hold R to Focus: commits 33 SOUL, stand still 1.2s to heal 1 (interrupted = SOUL lost)">
+          <span class="heart">♥</span><span class="heart">♥</span><span class="heart">♥</span><span class="heart">♥</span><span class="heart">♥</span>
+        </div>
+        <div id="rageBox" title="RAGE METER — fills to 100% when the KRATOS set is claimed at level 50">
+          <div id="rageBar"><div id="rageFill"></div></div>
+          <div id="rageLabel">RAGE</div>
+        </div>
+        <div id="soulMeter" title="Dimension SOUL — strike enemies with your hotbar weapons to charge • E = GLITCH WAVE (33) • hold R = FOCUS heal (33)">
+          <div id="soulFill"></div>
+          <div id="soulInner"><span id="soulNum">0</span><span id="soulLabel">SOUL</span></div>
+        </div>
+      </div>
+
+      <!-- Toast -->
+      <div id="toast"></div>
+      <div id="fadeFlash" class="fade-flash"></div>
+      <div id="anomalyFlash"></div>
+      <div id="rageFlash"></div>
+
+      <!-- Legendary unlock banner (KRATOS awakening) -->
+      <div id="legendBanner" class="hidden">
+        <span class="l1">LEGENDARY POWER AWAKENED</span>
+        <span class="l2">THE GHOST OF KRAZALITY</span>
+      </div>
+
+      <!-- Start screen -->
+      <div id="startScreen" class="overlay">
+        <div class="miniDeco" style="top:8%; left:8%; color:#39ff88;">⬢</div>
+        <div class="miniDeco" style="top:16%; right:10%; color:#ff3fd8; animation-delay:-2s;">✦</div>
+        <div class="miniDeco" style="bottom:14%; left:12%; color:#ffe94a; animation-delay:-4s;">◈</div>
+        <div class="miniDeco" style="bottom:8%; right:14%; color:#33f5ff; animation-delay:-1s;">⬡</div>
+        <h1 id="title"><span class="glitch" data-text="KRAZALITY">KRAZALITY</span></h1>
+        <p id="subtitle">— a glitching neon-pink descent into the void —</p>
+        <div id="controlsGrid">
+          <span class="k">A / D &nbsp;←→</span><span>RUN</span>
+          <span class="k">SPACE / W</span><span>JUMP</span>
+          <span class="k">F / CLICK / J</span><span>ATTACK (current weapon)</span>
+          <span class="k">Q • 1 / 2 / 3 / 4 / 5</span><span>CYCLE / SELECT HOTBAR SLOTS</span>
+          <span class="k">C</span><span>CHANGE ARMOR SET (LV 10+)</span>
+          <span class="k">E</span><span>GLITCH WAVE (33 SOUL)</span>
+          <span class="k">V</span><span>KRAZAL RAGE (LV 50 • FULL METER)</span>
+          <span class="k">L • H</span><span>DEV: +100 DUST • RESTORE HP</span>
+          <span class="k">R (HOLD)</span><span>FOCUS HEAL (33 SOUL)</span>
+          <span class="k">K</span><span>SKILL TREE</span>
+          <span class="k">P</span><span>PAUSE &nbsp;•&nbsp; F2 RESTART &nbsp;•&nbsp; M SOUND</span>
+        </div>
+        <button id="jumpIn" class="btn">▶ JUMP INTO REALITY</button>
+        <small>collect 3 portal shards • escape the vortex • reach level 50 to claim the BLADES OF CHAOS</small>
+      </div>
+
+      <!-- Win screen -->
+      <div id="winScreen" class="overlay hidden">
+        <h2 id="winTitle">YOU ESCAPED<br />KRAZALITY!</h2>
+        <div id="winStats"></div>
+        <button id="playAgainBtn" class="btn">▶ PLAY AGAIN</button>
+      </div>
+
+      <!-- Pause screen -->
+      <div id="pauseScreen" class="overlay hidden">
+        <h2 id="pauseTitle">⏸ PAUSED</h2>
+        <small>press P to resume</small>
+      </div>
+
+      <!-- Skill tree screen -->
+      <div id="skillsScreen" class="overlay hidden">
+        <div id="skillsModal">
+          <h2 id="skillsTitle">KRAZY SKILLS</h2>
+          <div id="skillPointsBox">SKILL POINTS: <b id="skillPointsNum">0</b></div>
+          <div id="skillsGrid">
+            <div class="skillCard" data-skill="sharpEdge">
+              <div class="skillName">A. SHARP EDGE</div>
+              <div class="skillDesc">Melee weapon range +50%</div>
+              <button class="skillBtn">BUY - 1 SP</button>
+            </div>
+            <div class="skillCard" data-skill="quickDraw">
+              <div class="skillName">B. QUICK DRAW</div>
+              <div class="skillDesc">Void Repeater loses its cooldown — rapid fire</div>
+              <button class="skillBtn">BUY - 1 SP</button>
+            </div>
+            <div class="skillCard" data-skill="doubleJump">
+              <div class="skillName">C. DIMENSION HOPPER</div>
+              <div class="skillDesc">Unlocks double jump mid-air</div>
+              <button class="skillBtn">BUY - 1 SP</button>
+            </div>
+          </div>
+          <small>PRESS K TO CLOSE</small>
+        </div>
+      </div>
+
+      <!-- Level 10 Faction Class choice -->
+      <div id="factionScreen" class="overlay hidden">
+        <h2 id="factionTitle">CHOOSE YOUR<br />ARSENAL</h2>
+        <p id="factionSub">LEVEL 10 — ONE WEAPON + ARMOR SET. LOCKED FOREVER.</p>
+        <div id="factionGrid">
+          <button class="factionCard fc-cyan" data-faction="VOID_HUNTER">
+            <span class="fName">VOID HUNTER</span>
+            <span class="fClass">RANGED CLASS</span>
+            <span class="fWeapon">VOID REPEATER<br />3-SHOT PLASMA BURSTS</span>
+            <span class="fArmor">VOID-STALKER CLOAK</span>
+            <span class="fSyn">AMMO CAP 50</span>
+          </button>
+          <button class="factionCard fc-pink" data-faction="PALADIN">
+            <span class="fName">AEGIS PALADIN</span>
+            <span class="fClass">DEFENSIVE CLASS</span>
+            <span class="fWeapon">AEGIS VANGUARD<br />PARRY &amp; REFLECT</span>
+            <span class="fArmor">QUANTUM PLATED CARAPACE</span>
+            <span class="fSyn">+1 SHIELD HEART</span>
+          </button>
+          <button class="factionCard fc-yellow" data-faction="JUGGERNAUT">
+            <span class="fName">RAIL-JUGGERNAUT</span>
+            <span class="fClass">HEAVY SNIPER CLASS</span>
+            <span class="fWeapon">OVERCHARGED RAILGUN<br />1.5s CHARGE PIERCE</span>
+            <span class="fArmor">GRAVITY STABILIZER EXOSUIT</span>
+            <span class="fSyn">85% CHARGE SPEED</span>
+          </button>
+        </div>
+        <small>CLICK A CARD TO LOCK IN YOUR ARSENAL</small>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
